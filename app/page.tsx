@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { FaTable, FaComment, FaPaperPlane, FaLongArrowAltDown } from 'react-icons/fa';
+import { FaTrash, FaTable, FaComment, FaPaperPlane, FaLongArrowAltDown } from 'react-icons/fa';
 import { SiLogstash } from "react-icons/si";
 
 interface LogEntry {
@@ -473,7 +473,23 @@ export default function LogsVisualization() {
                   Kita
                 </h1>
               </div>
-              
+              {logEntries.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <button 
+                    onClick={clearAllData}
+                    className="btn"
+                    style={{ 
+                      background: 'transparent', 
+                      color: 'var(--text-light)',
+                      border: '1px solid var(--border)',
+                      padding: '0.5rem 1rem'
+                    }}
+                  >
+                    <FaTrash size={14} style={{ marginRight: '0.5rem' }} />
+                    Clear All
+                  </button>
+                </div>
+              )}
             </div>
 
             {tableGroups.length === 0 ? (
