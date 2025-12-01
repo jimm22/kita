@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { FaTable, FaComment, FaPaperPlane, FaTrash, FaArrowDown } from 'react-icons/fa';
+import { FaComment, FaPaperPlane, FaTrash, FaLongArrowAltDown } from 'react-icons/fa';
+import { SiLogstash } from "react-icons/si";
 
 interface LogEntry {
   id: string;
@@ -461,7 +462,7 @@ export default function LogsVisualization() {
               marginBottom: '1.5rem'
             }}>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <FaTable size={24} color="var(--primary-color)" style={{ marginRight: '0.75rem' }} />
+                <SiLogstash size={24} color="var(--primary-color)" style={{ marginRight: '0.75rem' }} />
                 <h1 style={{ 
                   background: 'linear-gradient(135deg, var(--primary-dark), var(--primary-color))',
                   WebkitBackgroundClip: 'text',
@@ -469,41 +470,10 @@ export default function LogsVisualization() {
                   backgroundClip: 'text',
                   margin: 0
                 }}>
-                  Logs Visualization
+                  Kita
                 </h1>
               </div>
               
-              {logEntries.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ 
-                    fontSize: '0.9rem',
-                    color: 'var(--text-light)',
-                    background: 'var(--background-alt)',
-                    padding: '0.5rem 1rem',
-                    borderRadius: '4px'
-                  }}>
-                    <span style={{ color: 'var(--primary-color)', fontWeight: '600' }}>
-                      {totalEvents}
-                    </span> Total Events • 
-                    <span style={{ color: '#8b5cf6', fontWeight: '600', marginLeft: '0.5rem' }}>
-                      {minNumber}→{maxNumber}
-                    </span> Sequence
-                  </div>
-                  <button 
-                    onClick={clearAllData}
-                    className="btn"
-                    style={{ 
-                      background: 'transparent', 
-                      color: 'var(--text-light)',
-                      border: '1px solid var(--border)',
-                      padding: '0.5rem 1rem'
-                    }}
-                  >
-                    <FaTrash size={14} style={{ marginRight: '0.5rem' }} />
-                    Clear All
-                  </button>
-                </div>
-              )}
             </div>
 
             {tableGroups.length === 0 ? (
@@ -553,17 +523,11 @@ export default function LogsVisualization() {
                             margin: 0,
                             fontSize: '1.1rem'
                           }}>
-                            Sequence Group {groupIndex + 1}
+                             Set {groupIndex + 1}
                           </h3>
-                          <span style={{ 
-                            marginLeft: '1rem',
-                            color: 'var(--text-light)',
-                            fontSize: '0.9rem'
-                          }}>
-                            {group.entries.length} log(s)
-                          </span>
+                         
                         </div>
-                        <span style={{ 
+                        {/* <span style={{ 
                           color: 'var(--text-light)',
                           fontSize: '0.8rem',
                           background: 'var(--background-alt)',
@@ -571,7 +535,7 @@ export default function LogsVisualization() {
                           borderRadius: '4px'
                         }}>
                           Sequence: {group.minNumber} - {group.maxNumber}
-                        </span>
+                        </span> */}
                       </div>
 
                       {/* Table with transparent background for lines to show through */}
@@ -636,7 +600,6 @@ export default function LogsVisualization() {
                                 <td style={{ 
                                   padding: '1rem',
                                   borderRight: '1px solid var(--border)',
-                                  fontFamily: 'monospace',
                                   fontSize: '0.9rem',
                                   background: 'var(--background)'
                                 }}>
@@ -725,7 +688,6 @@ export default function LogsVisualization() {
                       <div style={{ 
                         display: 'flex', 
                         justifyContent: 'center', 
-                        marginBottom: '2rem',
                         position: 'relative',
                         zIndex: 2
                       }}>
@@ -739,21 +701,18 @@ export default function LogsVisualization() {
                             width: '40px',
                             height: '40px',
                             borderRadius: '50%',
-                            background: 'var(--background-alt)',
-                            border: '2px solid var(--border)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             color: 'var(--primary-color)'
                           }}>
-                            <FaArrowDown size={16} />
+                            <FaLongArrowAltDown size={40} />
                           </div>
                           <span style={{
                             fontSize: '0.8rem',
                             color: 'var(--text-light)',
                             fontWeight: '500'
                           }}>
-                            Next Sequence
                           </span>
                         </div>
                       </div>
@@ -794,7 +753,7 @@ export default function LogsVisualization() {
               fontSize: '0.9rem',
               color: 'var(--text-light)'
             }}>
-              Enter log data to visualize as tables. Every new input renumbers ALL logs.
+              Enter log data to visualize as tables. 
             </p>
           </div>
 
@@ -893,7 +852,7 @@ export default function LogsVisualization() {
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Paste your log data here... (Shift+Enter for new line)"
+                placeholder="Paste your log data here..."
                 style={{
                   width: '100%',
                   minHeight: '80px',
@@ -922,7 +881,7 @@ export default function LogsVisualization() {
                   opacity: inputText.trim() ? 1 : 0.6
                 }}
               >
-                Visualize Log
+                Visualize
                 <FaPaperPlane size={14} />
               </button>
             </div>
