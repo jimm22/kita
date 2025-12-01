@@ -60,14 +60,44 @@ export default function LogsVisualization() {
     }
   }, [inputText]);
 
-  // Parse timestamp from log line
+  // Parse timestamp from log line - FIXED FOR YOUR FORMAT
   const parseTimestamp = (line: string): Date | null => {
     const timestampMatch = line.match(/(\d{1,2}\/\d{1,2}\/\d{4} \d{1,2}:\d{2}:\d{2}\.\d{3} [AP]M)/);
     if (timestampMatch) {
       try {
-        return new Date(timestampMatch[1]);
+        const dateStr = timestampMatch[1];
+        // Convert to 24-hour format for reliable parsing
+        const dateTimeParts = dateStr.split(' ');
+        const datePart = dateTimeParts[0]; // MM/DD/YYYY
+        const timePart = dateTimeParts[1]; // HH:MM:SS.mmm
+        const ampm = dateTimeParts[2]; // AM/PM
+        
+        // Split time into hours, minutes, seconds, milliseconds
+        const timeParts = timePart.split(':');
+        let hours = parseInt(timeParts[0]);
+        const minutes = parseInt(timeParts[1]);
+        const secondsAndMs = timeParts[2].split('.');
+        const seconds = parseInt(secondsAndMs[0]);
+        const milliseconds = parseInt(secondsAndMs[1]);
+        
+        // Convert 12-hour format to 24-hour format
+        if (ampm === 'PM' && hours < 12) {
+          hours += 12;
+        } else if (ampm === 'AM' && hours === 12) {
+          hours = 0;
+        }
+        
+        // Parse the date part (MM/DD/YYYY)
+        const dateParts = datePart.split('/');
+        const month = parseInt(dateParts[0]) - 1; // Months are 0-indexed in JS
+        const day = parseInt(dateParts[1]);
+        const year = parseInt(dateParts[2]);
+        
+        // Create Date object
+        return new Date(year, month, day, hours, minutes, seconds, milliseconds);
       } catch (e) {
-        console.error('Failed to parse timestamp:', timestampMatch[1]);
+        console.error('Failed to parse timestamp:', timestampMatch[1], e);
+        return null;
       }
     }
     return null;
@@ -85,11 +115,19 @@ export default function LogsVisualization() {
     lines.forEach(line => {
       if (line.toLowerCase().includes('request journal entry created')) {
         hasRequest = true;
-        requestTimestamp = parseTimestamp(line) || undefined;
+        const ts = parseTimestamp(line);
+        if (ts) {
+          requestTimestamp = ts;
+          console.log('Parsed request timestamp:', ts, 'from line:', line);
+        }
       }
       if (line.toLowerCase().includes('response journal entry created')) {
         hasResponse = true;
-        responseTimestamp = parseTimestamp(line) || undefined;
+        const ts = parseTimestamp(line);
+        if (ts) {
+          responseTimestamp = ts;
+          console.log('Parsed response timestamp:', ts, 'from line:', line);
+        }
       }
     });
 
@@ -103,57 +141,83 @@ export default function LogsVisualization() {
     };
   };
 
-  // Get unified numbering for requests and responses
+  // Get combined sequential numbering for ALL events (both requests and responses)
+  // RE-EVALUATES EVERY TIME NEW LOG IS ADDED
   const getNumberedEntries = () => {
-    // Create an array of all events (both requests and responses)
+    if (logEntries.length === 0) return [];
+
+    console.log('=== RE-EVALUATING ALL NUMBERS ===');
+    console.log('Total log entries:', logEntries.length);
+
+    // Create an array of ALL events from ALL log entries
     const allEvents: Array<{
       id: string;
+      logEntryId: string;
       type: 'request' | 'response';
       timestamp: Date;
       logEntry: LogEntry;
     }> = [];
 
+    // Collect ALL events from ALL log entries
     logEntries.forEach(entry => {
       if (entry.hasRequest && entry.requestTimestamp) {
         allEvents.push({
-          id: entry.id + '-request',
+          id: `${entry.id}-request`,
+          logEntryId: entry.id,
           type: 'request',
           timestamp: entry.requestTimestamp,
           logEntry: entry
         });
+        console.log(`Added request event for ${entry.id}:`, entry.requestTimestamp);
       }
+      
       if (entry.hasResponse && entry.responseTimestamp) {
         allEvents.push({
-          id: entry.id + '-response',
+          id: `${entry.id}-response`,
+          logEntryId: entry.id,
           type: 'response',
           timestamp: entry.responseTimestamp,
           logEntry: entry
         });
+        console.log(`Added response event for ${entry.id}:`, entry.responseTimestamp);
       }
     });
 
-    // Sort all events by timestamp
+    // Sort ALL events by their timestamp in ascending order
     const sortedEvents = allEvents.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
-    // Create maps for quick lookup
-    const requestNumberMap = new Map();
-    const responseNumberMap = new Map();
-
-    // Assign sequential numbers to all events in chronological order
+    console.log('Sorted events (earliest to latest):');
     sortedEvents.forEach((event, index) => {
-      if (event.type === 'request') {
-        requestNumberMap.set(event.logEntry.id, index + 1);
-      } else {
-        responseNumberMap.set(event.logEntry.id, index + 1);
-      }
+      console.log(`  ${index + 1}. ${event.type} from ${event.logEntryId}:`, event.timestamp);
     });
 
-    // Return entries with their unified numbers
-    return logEntries.map(entry => ({
-      ...entry,
-      requestNumber: entry.hasRequest ? requestNumberMap.get(entry.id) || null : null,
-      responseNumber: entry.hasResponse ? responseNumberMap.get(entry.id) || null : null
-    }));
+    // Assign sequential numbers 1, 2, 3... to ALL events
+    const eventNumberMap = new Map<string, number>();
+    sortedEvents.forEach((event, index) => {
+      eventNumberMap.set(event.id, index + 1);
+    });
+
+    // Create new log entries with updated numbers
+    const updatedEntries = logEntries.map(entry => {
+      const updatedEntry = { ...entry };
+      
+      if (entry.hasRequest && entry.requestTimestamp) {
+        updatedEntry.requestNumber = eventNumberMap.get(`${entry.id}-request`) || null;
+      }
+      
+      if (entry.hasResponse && entry.responseTimestamp) {
+        updatedEntry.responseNumber = eventNumberMap.get(`${entry.id}-response`) || null;
+      }
+      
+      return updatedEntry;
+    });
+
+    console.log('Updated entries with new numbers:');
+    updatedEntries.forEach(entry => {
+      console.log(`  ${entry.firstColumn}: Request=${entry.requestNumber}, Response=${entry.responseNumber}`);
+    });
+
+    return updatedEntries;
   };
 
   const numberedEntries = getNumberedEntries();
@@ -176,7 +240,7 @@ export default function LogsVisualization() {
     };
   };
 
-  // Range-based grouping logic
+  // Enhanced range-based grouping logic
   const getTableGroups = () => {
     if (numberedEntries.length === 0) return [];
 
@@ -189,20 +253,29 @@ export default function LogsVisualization() {
       return rangeA.min - rangeB.min;
     });
 
+    // Group entries that share overlapping number ranges
     sortedEntries.forEach(entry => {
       const entryRange = getEntryRange(entry);
+      
+      // If entry has no numbers, put it in its own group
+      if (entryRange.min === Infinity || entryRange.max === -Infinity) {
+        groups.push({
+          id: `group-${groups.length + 1}`,
+          entries: [entry],
+          minNumber: 0,
+          maxNumber: 0
+        });
+        return;
+      }
       
       // Find if this entry fits into any existing group
       let foundGroup = false;
       
       for (const group of groups) {
-        // Check if entry's numbers are within the group's range
-        const isWithinGroupRange = 
-          (entryRange.min >= group.minNumber && entryRange.min <= group.maxNumber) ||
-          (entryRange.max >= group.minNumber && entryRange.max <= group.maxNumber) ||
-          (entryRange.min <= group.minNumber && entryRange.max >= group.maxNumber);
-
-        if (isWithinGroupRange) {
+        // Check if entry's number range overlaps with group's range
+        const overlaps = !(entryRange.max < group.minNumber || entryRange.min > group.maxNumber);
+        
+        if (overlaps) {
           group.entries.push(entry);
           group.minNumber = Math.min(group.minNumber, entryRange.min);
           group.maxNumber = Math.max(group.maxNumber, entryRange.max);
@@ -220,6 +293,15 @@ export default function LogsVisualization() {
           maxNumber: entryRange.max
         });
       }
+    });
+
+    // Sort entries within each group by their minimum number
+    groups.forEach(group => {
+      group.entries.sort((a, b) => {
+        const rangeA = getEntryRange(a);
+        const rangeB = getEntryRange(b);
+        return rangeA.min - rangeB.min;
+      });
     });
 
     // Sort groups by their minimum number
@@ -256,7 +338,7 @@ export default function LogsVisualization() {
     return positions.sort((a, b) => a.number - b.number);
   };
 
-  // Draw connecting lines
+  // Draw connecting lines between all numbers in sequence
   const drawConnectingLines = () => {
     if (!svgRef.current || !tableContainerRef.current) return;
 
@@ -265,51 +347,52 @@ export default function LogsVisualization() {
 
     const positions = getAllNumberPositions();
 
-    // Draw lines between ALL consecutive numbers (regardless of table)
+    // Draw lines between ALL consecutive numbers
     for (let i = 0; i < positions.length - 1; i++) {
       const current = positions[i];
       const next = positions[i + 1];
-
-      // Create line element
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', current.x.toString());
-      line.setAttribute('y1', current.y.toString());
-      line.setAttribute('x2', next.x.toString());
-      line.setAttribute('y2', next.y.toString());
       
-      // Set line style based on type
-      const isRequestLine = current.type === 'request' && next.type === 'request';
-      const isResponseLine = current.type === 'response' && next.type === 'response';
-      
-      if (isRequestLine) {
-        line.setAttribute('stroke', 'var(--primary-color)');
-        line.setAttribute('stroke-width', '3');
-      } else if (isResponseLine) {
-        line.setAttribute('stroke', '#3b82f6');
-        line.setAttribute('stroke-width', '3');
-      } else {
-        // Mixed type line (request to response or vice versa)
-        line.setAttribute('stroke', '#8b5cf6');
-        line.setAttribute('stroke-width', '2');
+      // Only draw line if numbers are consecutive (1→2, 2→3, etc.)
+      if (next.number === current.number + 1) {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', current.x.toString());
+        line.setAttribute('y1', current.y.toString());
+        line.setAttribute('x2', next.x.toString());
+        line.setAttribute('y2', next.y.toString());
+        
+        // Set line style based on type
+        const isRequestLine = current.type === 'request' && next.type === 'request';
+        const isResponseLine = current.type === 'response' && next.type === 'response';
+        
+        if (isRequestLine) {
+          line.setAttribute('stroke', 'var(--primary-color)');
+          line.setAttribute('stroke-width', '3');
+        } else if (isResponseLine) {
+          line.setAttribute('stroke', '#3b82f6');
+          line.setAttribute('stroke-width', '3');
+        } else {
+          // Mixed type line (request to response or vice versa)
+          line.setAttribute('stroke', '#8b5cf6');
+          line.setAttribute('stroke-width', '2');
+        }
+        
+        line.setAttribute('stroke-dasharray', '4,3');
+        line.setAttribute('opacity', '0.8');
+        svg.appendChild(line);
       }
-      
-      line.setAttribute('stroke-dasharray', '4,3');
-      line.setAttribute('opacity', '0.8');
-
-      svg.appendChild(line);
     }
 
-    console.log('Drawn lines between:', positions.map(p => p.number).join(' → '));
+    console.log('Number sequence:', positions.map(p => `${p.type.charAt(0)}${p.number}`).join(' → '));
   };
 
   // Redraw lines when entries change
   useEffect(() => {
     const timer = setTimeout(() => {
       drawConnectingLines();
-    }, 300); // Increased timeout to ensure DOM is ready
+    }, 300);
 
     return () => clearTimeout(timer);
-  }, [tableGroups]);
+  }, [numberedEntries, tableGroups]);
 
   // Redraw lines on window resize
   useEffect(() => {
@@ -357,6 +440,14 @@ export default function LogsVisualization() {
     setChatMessages([]);
   };
 
+  // Get all numbers for statistics
+  const allNumbers = numberedEntries.flatMap(entry => 
+    [entry.requestNumber, entry.responseNumber].filter(num => num !== null && num !== undefined) as number[]
+  );
+  const totalEvents = allNumbers.length;
+  const minNumber = totalEvents > 0 ? Math.min(...allNumbers) : 0;
+  const maxNumber = totalEvents > 0 ? Math.max(...allNumbers) : 0;
+
   return (
     <div className="app-container">
       <div className="main-layout">
@@ -383,19 +474,35 @@ export default function LogsVisualization() {
               </div>
               
               {logEntries.length > 0 && (
-                <button 
-                  onClick={clearAllData}
-                  className="btn"
-                  style={{ 
-                    background: 'transparent', 
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ 
+                    fontSize: '0.9rem',
                     color: 'var(--text-light)',
-                    border: '1px solid var(--border)',
-                    padding: '0.5rem 1rem'
-                  }}
-                >
-                  <FaTrash size={14} style={{ marginRight: '0.5rem' }} />
-                  Clear All
-                </button>
+                    background: 'var(--background-alt)',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '4px'
+                  }}>
+                    <span style={{ color: 'var(--primary-color)', fontWeight: '600' }}>
+                      {totalEvents}
+                    </span> Total Events • 
+                    <span style={{ color: '#8b5cf6', fontWeight: '600', marginLeft: '0.5rem' }}>
+                      {minNumber}→{maxNumber}
+                    </span> Sequence
+                  </div>
+                  <button 
+                    onClick={clearAllData}
+                    className="btn"
+                    style={{ 
+                      background: 'transparent', 
+                      color: 'var(--text-light)',
+                      border: '1px solid var(--border)',
+                      padding: '0.5rem 1rem'
+                    }}
+                  >
+                    <FaTrash size={14} style={{ marginRight: '0.5rem' }} />
+                    Clear All
+                  </button>
+                </div>
               )}
             </div>
 
@@ -423,7 +530,7 @@ export default function LogsVisualization() {
                     width: '100%',
                     height: '100%',
                     pointerEvents: 'none',
-                    zIndex: 5 // Higher z-index to be above tables
+                    zIndex: 5
                   }}
                 />
 
@@ -463,6 +570,7 @@ export default function LogsVisualization() {
                           padding: '0.25rem 0.5rem',
                           borderRadius: '4px'
                         }}>
+                          Sequence: {group.minNumber} - {group.maxNumber}
                         </span>
                       </div>
 
@@ -472,13 +580,13 @@ export default function LogsVisualization() {
                         borderRadius: '8px',
                         border: '1px solid var(--border)',
                         marginBottom: '1rem',
-                        background: 'transparent', // Make table container transparent
+                        background: 'transparent',
                         position: 'relative'
                       }}>
                         <table style={{ 
                           width: '100%',
                           borderCollapse: 'collapse',
-                          background: 'transparent' // Make table transparent
+                          background: 'transparent'
                         }}>
                           <thead>
                             <tr style={{ 
@@ -522,25 +630,17 @@ export default function LogsVisualization() {
                                 style={{ 
                                   borderBottom: '1px solid var(--border)',
                                   transition: 'background-color 0.2s ease',
-                                  background: 'transparent' // Make rows transparent
+                                  background: 'transparent'
                                 }}
                               >
                                 <td style={{ 
                                   padding: '1rem',
                                   borderRight: '1px solid var(--border)',
+                                  fontFamily: 'monospace',
                                   fontSize: '0.9rem',
                                   background: 'var(--background)'
                                 }}>
-                                  {entry.firstColumn.split('|').map((part, index, array) => (
-                                    <span key={index}>
-                                      {index === 0 ? (
-                                        <span style={{ fontWeight: 'bold' }}>{part}</span>
-                                      ) : (
-                                        part
-                                      )}
-                                      {index < array.length - 1 && '|'}
-                                    </span>
-                                  ))}
+                                  {entry.firstColumn}
                                 </td>
                                 <td style={{ 
                                   padding: '1rem',
@@ -565,9 +665,14 @@ export default function LogsVisualization() {
                                         fontSize: '0.9rem',
                                         boxShadow: 'var(--shadow)',
                                         position: 'relative',
-                                        zIndex: 10 // High z-index for numbers
+                                        zIndex: 10
                                       }}
-                                      title={`Request #${entry.requestNumber} - ${entry.requestTimestamp?.toLocaleString()}`}
+                                      title={`Request #${entry.requestNumber} at ${entry.requestTimestamp?.toLocaleTimeString([], { 
+                                        hour: '2-digit', 
+                                        minute: '2-digit',
+                                        second: '2-digit',
+                                        hour12: true 
+                                      })}`}
                                     >
                                       {entry.requestNumber}
                                     </div>
@@ -595,9 +700,14 @@ export default function LogsVisualization() {
                                         fontSize: '0.9rem',
                                         boxShadow: 'var(--shadow)',
                                         position: 'relative',
-                                        zIndex: 10 // High z-index for numbers
+                                        zIndex: 10
                                       }}
-                                      title={`Response #${entry.responseNumber} - ${entry.responseTimestamp?.toLocaleString()}`}
+                                      title={`Response #${entry.responseNumber} at ${entry.responseTimestamp?.toLocaleTimeString([], { 
+                                        hour: '2-digit', 
+                                        minute: '2-digit',
+                                        second: '2-digit',
+                                        hour12: true 
+                                      })}`}
                                     >
                                       {entry.responseNumber}
                                     </div>
@@ -610,12 +720,192 @@ export default function LogsVisualization() {
                       </div>
                     </div>
 
-                   
+                    {/* Down Arrow (except for last group) */}
+                    {groupIndex < tableGroups.length - 1 && (
+                      <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'center', 
+                        marginBottom: '2rem',
+                        position: 'relative',
+                        zIndex: 2
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '0.5rem'
+                        }}>
+                          <div style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '50%',
+                            background: 'var(--background-alt)',
+                            border: '2px solid var(--border)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--primary-color)'
+                          }}>
+                            <FaArrowDown size={16} />
+                          </div>
+                          <span style={{
+                            fontSize: '0.8rem',
+                            color: 'var(--text-light)',
+                            fontWeight: '500'
+                          }}>
+                            Next Sequence
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
-          </div>          
+          </div>
+
+          {/* Legend */}
+          {tableGroups.length > 0 && (
+            <div className="card" style={{ marginTop: '1rem' }}>
+              <h4 style={{ marginBottom: '1rem' }}>Visualization Legend</h4>
+              <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      background: 'var(--primary-color)',
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.7rem',
+                      fontWeight: '600'
+                    }}
+                  >
+                    1
+                  </div>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    Request number
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      background: '#3b82f6',
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.7rem',
+                      fontWeight: '600'
+                    }}
+                  >
+                    2
+                  </div>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    Response number
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '3px',
+                      background: 'var(--primary-color)',
+                      position: 'relative'
+                    }}
+                  >
+                    <div style={{
+                      position: 'absolute',
+                      width: '100%',
+                      height: '100%',
+                      background: 'var(--primary-color)',
+                      backgroundImage: `linear-gradient(90deg, transparent 0%, transparent 50%, var(--primary-color) 50%, var(--primary-color) 100%)`,
+                      backgroundSize: '4px 100%'
+                    }} />
+                  </div>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    Request flow (green)
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '3px',
+                      background: '#3b82f6',
+                      position: 'relative'
+                    }}
+                  >
+                    <div style={{
+                      position: 'absolute',
+                      width: '100%',
+                      height: '100%',
+                      background: '#3b82f6',
+                      backgroundImage: `linear-gradient(90deg, transparent 0%, transparent 50%, #3b82f6 50%, #3b82f6 100%)`,
+                      backgroundSize: '4px 100%'
+                    }} />
+                  </div>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    Response flow (blue)
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '3px',
+                      background: '#8b5cf6',
+                      position: 'relative'
+                    }}
+                  >
+                    <div style={{
+                      position: 'absolute',
+                      width: '100%',
+                      height: '100%',
+                      background: '#8b5cf6',
+                      backgroundImage: `linear-gradient(90deg, transparent 0%, transparent 50%, #8b5cf6 50%, #8b5cf6 100%)`,
+                      backgroundSize: '4px 100%'
+                    }} />
+                  </div>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    Mixed flow (purple)
+                  </span>
+                </div>
+              </div>
+
+              {/* Sequence Explanation */}
+              <div style={{ 
+                marginTop: '1rem',
+                padding: '1rem',
+                background: 'var(--background-alt)',
+                borderRadius: '8px',
+                border: '1px solid var(--border)'
+              }}>
+                <h5 style={{ margin: '0 0 0.5rem 0', color: 'var(--primary-dark)' }}>
+                  How Dynamic Numbering Works:
+                </h5>
+                <ul style={{ 
+                  margin: 0, 
+                  paddingLeft: '1.5rem',
+                  fontSize: '0.9rem',
+                  color: 'var(--text-secondary)'
+                }}>
+                  <li><strong>Every new input triggers complete re-evaluation</strong> of ALL logs</li>
+                  <li><strong>All requests and responses</strong> from ALL logs are sorted by their timestamps</li>
+                  <li><strong>Timestamps are parsed</strong> from your format: "11/27/2025 5:16:19.070 AM"</li>
+                  <li><strong>Numbers 1, 2, 3, 4...</strong> are assigned in chronological order</li>
+                  <li><strong>Existing logs can change numbers</strong> when new logs with intermediate timestamps are added</li>
+                  <li><strong>Example:</strong> If Request1=5:00, Response1=5:04 (1,2), adding Request2=5:01, Response2=5:03 makes it: Request1=1, Request2=2, Response2=3, Response1=4</li>
+                </ul>
+              </div>
+            </div>
+          )}
         </main>
 
         {/* Chat Sidebar */}
@@ -646,7 +936,7 @@ export default function LogsVisualization() {
               fontSize: '0.9rem',
               color: 'var(--text-light)'
             }}>
-              Enter log data to visualize as tables
+              Enter log data to visualize as tables. Every new input renumbers ALL logs.
             </p>
           </div>
 
@@ -675,7 +965,7 @@ export default function LogsVisualization() {
                     textAlign: 'left',
                     fontSize: '0.85rem'
                   }}>
-                    <strong>Example:</strong>
+                    <strong>Example format:</strong>
                     <br />
                     Dev to Aut | PGA
                     <br />
