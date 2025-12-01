@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { FaComment, FaPaperPlane, FaTrash, FaLongArrowAltDown } from 'react-icons/fa';
+import { FaTable, FaComment, FaPaperPlane, FaLongArrowAltDown } from 'react-icons/fa';
 import { SiLogstash } from "react-icons/si";
 
 interface LogEntry {
