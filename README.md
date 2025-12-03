@@ -36,4 +36,3 @@ Make sure you have the following installed:
 
 4. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000)
-```
